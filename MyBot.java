@@ -1,4 +1,5 @@
 import java.util.ArrayList;
+import java.util.List;
 import java.util.Random;
 
 public class MyBot {
@@ -9,25 +10,26 @@ public class MyBot {
     private static Direction randomDirection = Direction.STILL;
 
     public static void main(String[] args) throws java.io.IOException {
-        InitPackage iPackage = Networking.getInit();
+
+        final InitPackage iPackage = Networking.getInit();
         myID = iPackage.myID;
         gameMap = iPackage.map;
-
 
         Networking.sendInit("DinoBot2");
 
         while(true) {
-            ArrayList<Move> moves = new ArrayList<Move>();
+            List<Move> moves = new ArrayList<Move>();
 
-            gameMap = Networking.getFrame();
+            Networking.updateFrame(gameMap);
             int width = gameMap.width;
             int height = gameMap.height;
             randomDirection = Direction.CARDINALS[random.nextInt(2)+2];
 
-            for(int y = 0; y < height; y++) {
-                for(int x = 0; x < width; x++) {
-                    Location location = new Location(x,y);
-                    if (gameMap.getSite(location).owner == myID) {
+
+            for (int y = 0; y < height; y++) {
+                for (int x = 0; x < width; x++) {
+                    final Location location = gameMap.getLocation(x, y);
+                    if(location.getSite().owner == myID) {
                         moves.add(move(location));
                     }
                 }
@@ -37,7 +39,7 @@ public class MyBot {
     }
 
     private static Move move(Location location) {
-        Site site = gameMap.getSite(location);
+        final Site site = gameMap.getSite(location);
 
         boolean[] possible = new boolean[4];
         int numberPossible = 0;
