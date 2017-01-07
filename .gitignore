@@ -1,3 +1,4 @@
-RandomBot.java
+RandomBot*.java
 *.class
 *.hlt
+*.log

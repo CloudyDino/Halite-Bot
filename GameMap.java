@@ -51,6 +51,10 @@ public class GameMap{
         return Math.atan2(dy, dx);
     }
 
+    public Location getLocation(int x, int y) {
+        return locations[x][y];
+    }
+
     public Location getLocation(Location location, Direction direction) {
         switch (direction) {
             case STILL:
@@ -68,16 +72,12 @@ public class GameMap{
         }
     }
 
-    public Site getSite(Location loc, Direction dir) {
-        return getLocation(loc, dir).getSite();
-    }
-
     public Site getSite(Location loc) {
         return loc.getSite();
     }
 
-    public Location getLocation(int x, int y) {
-        return locations[x][y];
+    public Site getSite(Location loc, Direction dir) {
+        return getLocation(loc, dir).getSite();
     }
 
     void reset() {
