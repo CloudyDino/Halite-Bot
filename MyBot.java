@@ -7,7 +7,8 @@ public class MyBot {
     private static int myID;
     private static GameMap gameMap;
     private static Random random = new Random();
-    private static Direction randomDirection = Direction.STILL;
+    private static boolean randomGoNorthSouth = random.nextBoolean();
+    private static Location firstEnemyLocation;
 
     public static void main(String[] args) throws java.io.IOException {
 
@@ -15,22 +16,56 @@ public class MyBot {
         myID = iPackage.myID;
         gameMap = iPackage.map;
 
-        Networking.sendInit("DinoBot2");
+        Networking.sendInit("DinoBot3");
 
-        while(true) {
+
+        // Until attacked by an enemy and I lose more squares than I gain
+        int lastTerritory = 0;
+        int currentTerritory = 0;
+        while(lastTerritory <= currentTerritory) {
+            lastTerritory = currentTerritory;
+            currentTerritory = 0;
+            firstEnemyLocation = null;
+            randomGoNorthSouth = random.nextBoolean();
+
             List<Move> moves = new ArrayList<Move>();
-
             Networking.updateFrame(gameMap);
-            int width = gameMap.width;
-            int height = gameMap.height;
-            randomDirection = Direction.CARDINALS[random.nextInt(2)+2];
 
+            for (int y = 0; y < gameMap.height; y++) {
+                for (int x = 0; x < gameMap.width; x++) {
+                    Location location = gameMap.getLocation(x, y);
+                    Site site = location.getSite();
+                    if(site.owner == myID) {
+                        currentTerritory++;
+                        if (site.strength > 5*site.production)
+                            moves.add(moveToHighProductionStrengthRatio(location));
+                    }
+                    else if (firstEnemyLocation != null && site.owner != 0) {
+                        firstEnemyLocation = location;
+                    }
+                }
+            }
+            Networking.sendFrame(moves);
+        }
 
-            for (int y = 0; y < height; y++) {
-                for (int x = 0; x < width; x++) {
+        //End moves to try to kill enemy
+        while(true) {
+            firstEnemyLocation = null;
+            randomGoNorthSouth = random.nextBoolean();
+
+            List<Move> moves = new ArrayList<Move>();
+            Networking.updateFrame(gameMap);
+
+            for (int y = 0; y < gameMap.height; y++) {
+                for (int x = 0; x < gameMap.width; x++) {
                     final Location location = gameMap.getLocation(x, y);
-                    if(location.getSite().owner == myID) {
-                        moves.add(move(location));
+                    Site site = location.getSite();
+                    if(site.owner == myID) {
+                        if (site.strength > 5*site.production)
+                            moves.add(moveToNearestEnemy(location));
+                    }
+                    else if (firstEnemyLocation != null && site.owner != 0) {
+                        firstEnemyLocation = location;
                     }
                 }
             }
@@ -38,51 +73,158 @@ public class MyBot {
         }
     }
 
-    private static Move move(Location location) {
-        final Site site = gameMap.getSite(location);
+    // TYPES OF MOVES
 
-        boolean[] possible = new boolean[4];
-        int numberPossible = 0;
-        int numberOwned = 0;
-
-        for (int i=0; i<4; i++) {
-            Site toGoSite = gameMap.getSite(location,Direction.CARDINALS[i]);
-            if (toGoSite.owner == myID) {
-                numberOwned++;
-            } else if (toGoSite.strength < site.strength) {
-                possible[i] = true;
-                numberPossible++;
+    //Goes to nearest edge if not on the edge
+    private static Move moveToHighProductionStrengthRatio(Location loc) {
+        Direction toGoDir = Direction.STILL;
+        double toGoProduction = 0;
+        double toGoStrength = 1;
+        for (Direction dir : Direction.CARDINALS) {
+            Site possibilitySite = gameMap.getSite(loc, dir);
+            if (possibilitySite.owner != myID && ((double)possibilitySite.production)/possibilitySite.strength > toGoProduction/toGoStrength) {
+                toGoDir = dir;
+                toGoProduction = possibilitySite.production;
+                toGoStrength = possibilitySite.strength;
             }
         }
-        if (numberOwned == 4) {
-            if (site.strength > 6*site.production)
-                return new Move(location, randomDirection);
-            return new Move(location, Direction.STILL);
-        } else if (numberPossible == 0) {
-            return new Move(location, Direction.STILL);
-        } else if (numberPossible == 1) {
-            for (int i=0; i<4; i++) {
-                if (possible[i])
-                    return new Move(location, Direction.CARDINALS[i]);
+        if (toGoDir == Direction.STILL) {
+            return moveToNearestEdge(loc);
+        }
+        else if (loc.getSite().strength > gameMap.getSite(loc, toGoDir).strength) {
+            return new Move(loc, toGoDir);
+        }
+        else {
+            return new Move(loc, Direction.STILL);
+        }
+    }
+    private static Move moveToNearestEdge(Location loc) {
+        return new Move(loc, findNearestForeignDirection(loc));
+    }
+    private static Move moveToNearestEnemy(Location loc) {
+        return new Move(loc, findNearestEnemyDirection(loc));
+    }
+
+    // TYPES OF LOCATION FINDERS
+    private static Location findNearestEnemy(Location loc) {
+        return findNearestButAvoid(loc, 0);
+    }
+    private static Location findNearestForeign(Location loc) {
+        return findNearestButAvoid(loc, myID);
+    }
+    private static Location findNearestButAvoid(Location loc, int avoidID) {
+        int maxRadius = Math.min(gameMap.width, gameMap.height)/2;
+        for (int radius = 1; radius < maxRadius; radius++) {
+            Location possibility;
+            if (loc.y-radius < 0)
+                possibility = gameMap.getLocation(loc.x, loc.y-radius+gameMap.height);
+            else
+                possibility = gameMap.getLocation(loc.x, loc.y-radius);
+            // Down and to the right
+            for (int i = 0; i < radius; i++) {
+                possibility = gameMap.getLocation(possibility, Direction.EAST);
+                possibility = gameMap.getLocation(possibility, Direction.SOUTH);
+                Site possibilitySite = gameMap.getSite(possibility);
+                if (possibilitySite.owner != myID && possibilitySite.owner != avoidID) {
+                    return possibility;
+                }
             }
-        } else {
-            int toGoProduction = 0;
-            for (int i=0; i<4; i++) {
-                if (possible[i]) {
-                    Site toGoSite = gameMap.getSite(location, Direction.CARDINALS[i]);
-                    if (toGoSite.production > toGoProduction) {
-                        toGoProduction = toGoSite.production;
-                    } else {
-                        possible[i] = false;
+            // Down and to the left
+            for (int i = 0; i < radius; i++) {
+                possibility = gameMap.getLocation(possibility, Direction.WEST);
+                possibility = gameMap.getLocation(possibility, Direction.SOUTH);
+                Site possibilitySite = gameMap.getSite(possibility);
+                if (possibilitySite.owner != myID && possibilitySite.owner != avoidID) {
+                    return possibility;
+                }
+            }
+            // Up and to the left
+            for (int i = 0; i < radius; i++) {
+                possibility = gameMap.getLocation(possibility, Direction.WEST);
+                possibility = gameMap.getLocation(possibility, Direction.NORTH);
+                Site possibilitySite = gameMap.getSite(possibility);
+                if (possibilitySite.owner != myID && possibilitySite.owner != avoidID) {
+                    return possibility;
+                }
+            }
+            // Up and to the right
+            for (int i = 0; i < radius; i++) {
+                possibility = gameMap.getLocation(possibility, Direction.EAST);
+                possibility = gameMap.getLocation(possibility, Direction.SOUTH);
+                Site possibilitySite = gameMap.getSite(possibility);
+                if (possibilitySite.owner != myID && possibilitySite.owner != avoidID) {
+                    return possibility;
+                }
+            }
+        }
+        // If I can't find a place with that, I'll just return the first one found
+        if (firstEnemyLocation == null) {
+            for (int y = 0; y < gameMap.height; y++) {
+                for (int x = 0; x < gameMap.width; x++) {
+                    final Location location = gameMap.getLocation(x, y);
+                    Site site = gameMap.getLocation(x, y).getSite();
+                    if(site.owner != myID && site.owner != 0) {
+                        firstEnemyLocation = location;
+                        return firstEnemyLocation;
                     }
                 }
             }
-            for (int i=3; i>=0; i--) {
-                if (possible[i]) {
-                    return new Move(location, Direction.CARDINALS[i]);
-                }
+        }
+        return firstEnemyLocation;
+    }
+
+    // TYPES OF DIRECTION CHOOSER (prefers north and south over east and west)
+    private static Direction findNearestEnemyDirection(Location loc) {
+        Location toGo = findNearestEnemy(loc);
+        return findDirectionToGo(loc, toGo);
+    }
+    private static Direction findNearestForeignDirection(Location loc) {
+        Location toGo = findNearestForeign(loc);
+        return findDirectionToGo(loc, toGo);
+    }
+    private static Direction findDirectionToGo(Location currentLoc, Location toGoLoc) {
+        if (randomGoNorthSouth) {
+            if (toGoLoc.y != currentLoc.y) {
+                if (toGoLoc.y < currentLoc.y && (currentLoc.y-toGoLoc.y) < (gameMap.height/2))
+                    return Direction.NORTH;
+                else
+                    return Direction.SOUTH;
+            }
+            else {
+                if (toGoLoc.x < currentLoc.x && (currentLoc.x-toGoLoc.x) < (gameMap.width/2))
+                    return Direction.WEST;
+                else
+                    return Direction.EAST;
             }
         }
-        return new Move(location, Direction.STILL);
+        else {
+            if (toGoLoc.x != currentLoc.x) {
+                if (toGoLoc.x < currentLoc.x && (currentLoc.x-toGoLoc.x) < (gameMap.width/2))
+                    return Direction.WEST;
+                else
+                    return Direction.EAST;
+            }
+            else {
+                if (toGoLoc.y < currentLoc.y && (currentLoc.y-toGoLoc.y) < (gameMap.height/2))
+                    return Direction.NORTH;
+                else
+                    return Direction.SOUTH;
+            }
+        }
+
+        /*
+        if (toGoLoc.y != currentLoc.y) {
+            if (toGoLoc.y < currentLoc.y && (currentLoc.y-toGoLoc.y) < (gameMap.height/2))
+                return Direction.NORTH;
+            else
+                return Direction.SOUTH;
+        }
+        else {
+            if (toGoLoc.x < currentLoc.x && (currentLoc.x-toGoLoc.x) < (gameMap.width/2))
+                return Direction.WEST;
+            else
+                return Direction.EAST;
+        }
+        */
     }
 }
