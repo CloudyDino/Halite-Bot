@@ -16,7 +16,7 @@ public class MyBot {
         myID = iPackage.myID;
         gameMap = iPackage.map;
 
-        Networking.sendInit("DinoBot3");
+        Networking.sendInit("DinoBot4");
 
 
         // Until attacked by an enemy and I lose more squares than I gain
@@ -183,48 +183,39 @@ public class MyBot {
         return findDirectionToGo(loc, toGo);
     }
     private static Direction findDirectionToGo(Location currentLoc, Location toGoLoc) {
+        Direction toGoDir = Direction.STILL;
         if (randomGoNorthSouth) {
             if (toGoLoc.y != currentLoc.y) {
                 if (toGoLoc.y < currentLoc.y && (currentLoc.y-toGoLoc.y) < (gameMap.height/2))
-                    return Direction.NORTH;
+                    toGoDir =  Direction.NORTH;
                 else
-                    return Direction.SOUTH;
+                    toGoDir =  Direction.SOUTH;
             }
             else {
                 if (toGoLoc.x < currentLoc.x && (currentLoc.x-toGoLoc.x) < (gameMap.width/2))
-                    return Direction.WEST;
+                    toGoDir =  Direction.WEST;
                 else
-                    return Direction.EAST;
+                    toGoDir =  Direction.EAST;
             }
         }
         else {
             if (toGoLoc.x != currentLoc.x) {
                 if (toGoLoc.x < currentLoc.x && (currentLoc.x-toGoLoc.x) < (gameMap.width/2))
-                    return Direction.WEST;
+                    toGoDir =  Direction.WEST;
                 else
-                    return Direction.EAST;
+                    toGoDir =  Direction.EAST;
             }
             else {
                 if (toGoLoc.y < currentLoc.y && (currentLoc.y-toGoLoc.y) < (gameMap.height/2))
-                    return Direction.NORTH;
+                    toGoDir =  Direction.NORTH;
                 else
-                    return Direction.SOUTH;
+                    toGoDir =  Direction.SOUTH;
             }
         }
-
-        /*
-        if (toGoLoc.y != currentLoc.y) {
-            if (toGoLoc.y < currentLoc.y && (currentLoc.y-toGoLoc.y) < (gameMap.height/2))
-                return Direction.NORTH;
-            else
-                return Direction.SOUTH;
+        Site toGoSite = gameMap.getLocation(currentLoc, toGoDir).getSite();
+        if (toGoSite.owner != myID && gameMap.getSite(currentLoc).strength < toGoSite.strength) {
+            return Direction.STILL;
         }
-        else {
-            if (toGoLoc.x < currentLoc.x && (currentLoc.x-toGoLoc.x) < (gameMap.width/2))
-                return Direction.WEST;
-            else
-                return Direction.EAST;
-        }
-        */
+        return toGoDir;
     }
 }
